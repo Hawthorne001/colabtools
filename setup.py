@@ -22,12 +22,12 @@ DEPENDENCIES = (
     'google-auth==2.27.0',
     'ipykernel==5.5.6',
     'ipyparallel==8.8.0',
-    'ipython==7.34.0',
+    'ipython==8.10.0',
     'notebook==6.5.5',
     'pandas==2.0.3',
     'portpicker==1.5.2',
-    'requests==2.31.0',
-    'tornado==6.3.3',
+    'requests==2.32.2',
+    'tornado==6.4.1',
 )
 
 setup(
