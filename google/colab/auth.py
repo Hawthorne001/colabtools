@@ -13,7 +13,7 @@
 # limitations under the License.
 """Colab-specific authentication helpers."""
 
-# TODO(b/113878301): Test that imported modules do not appear in autocomplete.
+# TODO: Test that imported modules do not appear in autocomplete.
 import contextlib as _contextlib
 import enum as _enum
 import json as _json
@@ -117,7 +117,7 @@ def _check_adc(credential_type=_CredentialType.NO_CHECK):
   from google.oauth2.service_account import Credentials as _ServiceAccountCredentials  # pylint: disable=g-import-not-at-top
 
   if credential_type == _CredentialType.SERVICE_ACCOUNT:
-    # TODO(b/224641665) We should call refresh() on service account credentials
+    # TODO We should call refresh() on service account credentials
     # as well.
     return isinstance(creds, _ServiceAccountCredentials)
   try:
@@ -162,7 +162,7 @@ def _gcloud_login():
     # https://github.com/jupyter/notebook/issues/3159
     prompt = prompt.rstrip()
     # Suppress the --launch-browser deprecation warning.
-    # TODO(b/218377323): Remove this.
+    # TODO: Remove this.
     prompt = '\n'.join(
         [line for line in prompt.splitlines() if 'launch-browser' not in line]
     )
@@ -195,7 +195,7 @@ def _install_adc():
     f.write(ls[0][1])
 
 
-# TODO(b/218377323): Remove.
+# TODO: Remove.
 def _enable_metadata_server_for_gcloud():
   with _output.temporary():
     _subprocess.run(
@@ -214,27 +214,6 @@ def _enable_metadata_server_for_gcloud():
 def _noop():
   """Null context manager, like contextlib.nullcontext in python 3.7+."""
   yield
-
-
-def _setup_tpu_auth():
-  """Pass current ADC to Tensorflow to setup auth."""
-  # If we've got a TPU attached, we want to run a TF operation to provide
-  # our new credentials to the TPU for GCS operations.
-  import tensorflow as tf  # pylint: disable=g-import-not-at-top
-
-  if tf.__version__.startswith('1'):
-    colab_tpu_addr = _os.environ.get('COLAB_TPU_ADDR', '')
-    with tf.compat.v1.Session('grpc://{}'.format(colab_tpu_addr)) as sess:
-      with open(_get_adc_path()) as auth_info:
-        tf.contrib.cloud.configure_gcs(sess, credentials=_json.load(auth_info))
-  else:
-    # pytype: skip-file
-    tf.config.experimental_connect_to_cluster(
-        tf.distribute.cluster_resolver.TPUClusterResolver()
-    )
-    import tensorflow_gcs_config as _tgc  # pylint: disable=g-import-not-at-top
-
-    _tgc.configure_gcs_from_colab_auth()
 
 
 # pylint:disable=line-too-long
@@ -261,13 +240,13 @@ def authenticate_user(clear_output=True, project_id=None):
   Raises:
     errors.AuthorizationError: If authorization fails.
   """
+  if _os.environ.get('VERTEX_PRODUCT') == 'COLAB_ENTERPRISE':
+    print(
+        'WARNING: google.colab.auth.authenticate_user() is not supported in'
+        ' Colab Enterprise.'
+    )
+    return
   use_auth_ephem = _os.environ.get('USE_AUTH_EPHEM', '0') == '1'
-  colab_tpu_addr = _os.environ.get('COLAB_TPU_ADDR', '')
-  configure_tpu_auth = (
-      'COLAB_SKIP_AUTOMATIC_TPU_AUTH' not in _os.environ
-      and colab_tpu_addr
-      and not use_auth_ephem
-  )
   if project_id is not None:
     _set_no_service_account_env_for_project(project_id)
   if _os.path.exists('/var/colab/mp'):
@@ -285,18 +264,10 @@ def authenticate_user(clear_output=True, project_id=None):
       )
       _enable_metadata_server_for_gcloud()
     else:
-      if colab_tpu_addr:
-        print(
-            'WARNING: auth.authenticate_user() will eventually stop supporting'
-            ' auth for Tensorflow on TPU devices. See'
-            ' auth.authenticate_service_account() instead.'
-        )
       context_manager = _output.temporary if clear_output else _noop
       with context_manager():
         _gcloud_login()
       _install_adc()
-      if configure_tpu_auth:
-        _setup_tpu_auth()
   if _check_adc(_CredentialType.USER):
     return
   raise _errors.AuthorizationError('Failed to fetch user credentials')
@@ -353,10 +324,6 @@ def authenticate_service_account(clear_output=True):
     raise NotImplementedError(__name__ + ' is unsupported in this environment.')
   if _check_adc(_CredentialType.SERVICE_ACCOUNT):
     return
-  colab_tpu_addr = _os.environ.get('COLAB_TPU_ADDR', '')
-  configure_tpu_auth = (
-      'COLAB_SKIP_AUTOMATIC_TPU_AUTH' not in _os.environ and colab_tpu_addr
-  )
   _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = _get_adc_path()
   if not _check_adc(_CredentialType.SERVICE_ACCOUNT):
     with _output.temporary():
@@ -366,7 +333,7 @@ def authenticate_service_account(clear_output=True):
           ' for help.\n\n'
       )
       adc_path = _get_adc_path()
-      # TODO(b/226659795): Offer programmatic option, https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-gcloud
+      # TODO: Offer programmatic option, https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-gcloud
       for _ in range(3):
         uploaded_file = _files._upload_file(adc_path)  # pylint: disable=protected-access
         if not uploaded_file:
@@ -374,8 +341,6 @@ def authenticate_service_account(clear_output=True):
           return
         _, content = uploaded_file
         if _is_service_account_key(content):
-          if configure_tpu_auth:
-            _setup_tpu_auth()
           _activate_service_account_key(content, clear_output=clear_output)
           break
         print('Invalid credentials: please try again.\n\n')

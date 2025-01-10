@@ -6,10 +6,29 @@ import google.auth
 from google.colab import auth
 import gspread
 import IPython
+import numpy as np
 import pandas as pd
 
-
 _gspread_client = None
+
+
+def _clean_val(val):
+  if isinstance(val, pd.Timestamp):
+    return val.isoformat()
+  if isinstance(val, np.longdouble):
+    return float(val)
+  if isinstance(val, list):
+    return str(val)
+  return val
+
+
+def _to_frame(index):
+  if isinstance(index, pd.MultiIndex):
+    frame = index.to_frame(index=False)
+  else:
+    # workaround for https://github.com/pandas-dev/pandas/issues/25809
+    frame = pd.DataFrame(index)
+  return frame.map(_clean_val).replace({np.nan: None})
 
 
 def _generate_creds(unused_credentials=None):
@@ -23,7 +42,21 @@ def _generate_creds(unused_credentials=None):
 
 
 class InteractiveSheet:
-  """A lightweight wrapper to embed interactive sheets in Colab iframes."""
+  """A lightweight wrapper to embed interactive sheets in Colab iframes.
+
+  Public methods:
+    as_df: fetches the data in the current worksheet and returns a new dataframe
+    update: clears the sheet and replaces it with the provided dataframe
+    display: displays the embedded sheet in Colab
+
+  Attributes:
+    sheet: a gspread.models.Spreadsheet that contains the worksheet
+    worksheet: a gspread.models.Worksheet that contains the data for this
+      InteractiveSheet
+    url: a string with the url to the sheet
+    embedded_url: a string with the url to the embedded sheet
+    storage_strategy: an instance of InteractiveSheetStorageStrategy
+  """
 
   def __init__(
       self,
@@ -35,7 +68,8 @@ class InteractiveSheet:
       worksheet_id=-1,
       worksheet_name='',
       credentials=None,
-      include_column_headers=False,
+      include_column_headers=True,
+      display=True,
   ):
     """Initialize a new InteractiveSheet.
 
@@ -59,6 +93,7 @@ class InteractiveSheet:
       credentials: If provided, use these oauth credentials.
       include_column_headers: If True, assume the first row of the sheet is a
         header column for both reads and writes.
+      display: If True, displays the embedded sheet in the cell output.
     """
     if sum([bool(url), bool(sheet_id), bool(title)]) > 1:
       raise ValueError(
@@ -97,7 +132,8 @@ class InteractiveSheet:
 
     if df is not None:
       self.update(df=df)
-    self.display()
+    if display:
+      self.display()
 
   def _load_or_create_sheet(self, url='', title=''):
     """A helper function to load a sheet.
@@ -146,15 +182,16 @@ class InteractiveSheet:
     data = self.storage_strategy.read(self.worksheet)
     return pd.DataFrame(data)
 
-  def update(self, df):
+  def update(self, df, **kwargs):
     """Update clears the sheet and replaces it with the provided dataframe.
 
     Args:
       df: the source data
+      **kwargs: additional arguments to pass to the gspread update method
     """
     self._ensure_gspread_client()
     self.worksheet.clear()
-    self.storage_strategy.write(self.worksheet, df)
+    self.storage_strategy.write(self.worksheet, _to_frame(df), **kwargs)
 
   def display(self, height=600):
     """Display the embedded sheet in Colab.
@@ -175,7 +212,7 @@ class InteractiveSheetStorageStrategy(abc.ABC):
     pass
 
   @abc.abstractmethod
-  def write(self, worksheet, df):
+  def write(self, worksheet, df, **kwargs):
     pass
 
 
@@ -186,9 +223,9 @@ class HeaderlessStorageStrategy(InteractiveSheetStorageStrategy):
     data = worksheet.get_values()
     return pd.DataFrame(data)
 
-  def write(self, worksheet, df):
+  def write(self, worksheet, df, **kwargs):
     data = [list(r) for _, r in df.iterrows()]
-    worksheet.update('', data)
+    worksheet.update('', data, **kwargs)
 
 
 class HeaderStorageStrategy(InteractiveSheetStorageStrategy):
@@ -198,6 +235,6 @@ class HeaderStorageStrategy(InteractiveSheetStorageStrategy):
     data = worksheet.get_all_records()
     return pd.DataFrame(data)
 
-  def write(self, worksheet, df):
+  def write(self, worksheet, df, **kwargs):
     data = [list(df.columns)] + [list(r) for _, r in df.iterrows()]
-    worksheet.update('', data)
+    worksheet.update('', data, **kwargs)

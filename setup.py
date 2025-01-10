@@ -24,9 +24,9 @@ DEPENDENCIES = (
     'ipyparallel==8.8.0',
     'ipython==7.34.0',
     'notebook==6.5.5',
-    'pandas==2.0.3',
+    'pandas==2.2.2',
     'portpicker==1.5.2',
-    'requests==2.31.0',
+    'requests==2.32.3',
     'tornado==6.3.3',
 )
 
@@ -40,12 +40,12 @@ setup(
     url='https://colaboratory.research.google.com/',
     packages=find_packages(exclude=('tests*',)),
     install_requires=DEPENDENCIES,
-    namespace_packages=('google',),
     license='Apache 2.0',
     keywords='google colab ipython jupyter',
     classifiers=(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX',

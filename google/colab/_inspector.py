@@ -135,15 +135,12 @@ def _getargspec(obj):
 
 
 def _getargspec_dict(obj):
-  """Py2/Py3 compability wrapper for _getargspec.
+  """Wrap oinspect.getargspec, which in turns wraps inspect.getfullargspec.
 
-  Python's `inspect.getargspec` returns different types in python2 and python3,
-  and this function exists to paper over the difference: we always move
-  `spec.keywords` to `spec.varkw`; in order to make this possible, we return a
-  dict instead of a namedtuple.
+  For historical Py2 compabality this returns a dict instead of a namedtuple.
 
-  We also call `_safe_repr` on all values in `defaults`, to avoid potentially
-  expensive computation of string representations.
+  Calls `_safe_repr` on all values in `defaults` to avoid potentially expensive
+  computation of string representations.
 
   Args:
     obj: object whose argspec we return
@@ -154,8 +151,6 @@ def _getargspec_dict(obj):
   argspec = _getargspec(obj)
   if argspec is None:
     return None
-  # We need to avoid potentially computing expensive string representations, so
-  # we proactively call _safe_repr ourselves.
   if argspec.defaults:
     argspec = argspec._replace(
         defaults=[_safe_repr(val) for val in argspec.defaults]
@@ -472,14 +467,13 @@ class ColabInspector(oinspect.Inspector):
       new_params = []
       for v in sig.parameters.values():
         new_default = v.default
-        if v.default != v.empty:
+        if v.default is not v.empty:
           new_default = _SafeReprParam(v.default)
         new_params.append(v.replace(default=new_default))
       new_sig = sig.replace(parameters=new_params)
       return f'{oname}{new_sig}'
     except:  # pylint: disable=bare-except
       logging.exception('Exception raised in ColabInspector._getdef')
-
   def info(self, obj, oname='', formatter=None, info=None, detail_level=0):
     """Compute a dict with detailed information about an object.
 
@@ -518,7 +512,7 @@ class ColabInspector(oinspect.Inspector):
     # * source_definition
     #
     # For detail_level 1, we include:
-    # * file
+    # * source
     # This can be expensive, as the stdlib mechanisms for looking up the file
     # containing obj may call repr(obj).
     #
@@ -530,7 +524,7 @@ class ColabInspector(oinspect.Inspector):
     # * ismagic
     # * namespace
     #
-    # TODO(b/138128444): Handle class_docstring and call_def, or determine that
+    # TODO: Handle class_docstring and call_def, or determine that
     # we're safe ignoring them.
 
     obj_type = type(obj)
@@ -571,7 +565,7 @@ class ColabInspector(oinspect.Inspector):
     if detail_level == 1:
       # This should only ever happen if the user has asked for source (eg via
       # `obj??`), so we're OK with potentially calling repr for now.
-      # TODO(b/138128444): Ensure we don't call str() or repr().
+      # TODO: Ensure we don't call str() or repr().
       source = _getsource(obj)
       if source is None and hasattr(obj, '__class__'):
         source = _getsource(obj.__class__)
